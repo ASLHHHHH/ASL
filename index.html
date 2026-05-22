@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jesse's music player</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js"></script>
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#18181b">
+  <style>
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .lyric-line { 
+      transition: all 0.3s ease; 
+      transform-origin: center;
+      font-size: 1.125rem;
+    }
+    .lyric-active {
+      transform: scale(1.15) !important;
+      color: white !important;
+      background-color: rgba(255, 255, 255, 0.05) !important;
+    }
+    @media (min-width: 768px) {
+      .lyric-line { font-size: 1.25rem; }
+      .lyric-active { transform: scale(1.2) !important; }
+    }
+    input[type=range] { -webkit-appearance: none; appearance: none; background: transparent; }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      height: 12px;
+      width: 12px;
+      border-radius: 50%;
+      background: #ffffff;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(0,0,0,0.5);
+      margin-top: -3px;
+    }
+    input[type=range]::-moz-range-thumb {
+      height: 12px; width: 12px; border-radius: 50%; background: #ffffff; cursor: pointer; border: none;
+    }
+    input[type=range]::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body class="bg-zinc-950 text-zinc-100 font-sans h-[100dvh] flex flex-col overflow-hidden">
+
+  <!-- Header -->
+  <header id="app-header" class="flex-none flex items-center justify-between px-3 md:px-6 py-2 md:py-3 bg-zinc-900 border-b border-zinc-800 shrink-0 cursor-pointer select-none transition-colors hover:bg-zinc-800/80">
+    <div class="flex items-center gap-2">
+      <div class="bg-indigo-600 p-1.5 md:p-2 rounded-lg md:rounded-xl">
+        <i data-lucide="disc-3" class="w-4 h-4 md:w-5 md:h-5 text-white animate-[spin_5s_linear_infinite]"></i>
+      </div>
+      <h1 class="text-lg md:text-xl font-bold tracking-tight mr-2">Jesse's music player</h1>
+      <button id="btn-top-play" class="p-1.5 md:p-2 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/5 transition-all rounded-full text-zinc-300 hover:text-white shadow-sm disabled:opacity-50" title="播放/暂停" disabled>
+        <i id="icon-top-play" data-lucide="play" class="w-3 h-3 md:w-4 md:h-4 mt-[1px] ml-[1px]"></i>
+        <i id="icon-top-pause" data-lucide="pause" class="w-3 h-3 md:w-4 md:h-4 hidden"></i>
+      </button>
+    </div>
+    
+    <!-- Tab Switcher -->
+    <div class="flex bg-zinc-800 p-1 rounded-lg">
+      <button id="tab-player" class="flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-md text-xs md:text-sm font-medium transition-all bg-zinc-700 text-white shadow-sm">
+        <i data-lucide="music-2" class="w-3.5 h-3.5 md:w-4 md:h-4"></i>
+        <span class="hidden sm:inline">本地播放器</span>
+      </button>
+      <button id="tab-gd" class="flex items-center gap-1.5 px-3 py-1.5 md:px-4 md:py-2 rounded-md text-xs md:text-sm font-medium transition-all text-zinc-400 hover:text-zinc-200">
+        <i data-lucide="globe" class="w-3.5 h-3.5 md:w-4 md:h-4"></i>
+        <span class="hidden sm:inline">GD音乐台</span>
+      </button>
+    </div>
+  </header>
+  <!-- Playlist Drawer -->
+  <div id="playlist-drawer" class="fixed inset-y-0 left-0 w-80 bg-zinc-900 border-r border-zinc-800 transform -translate-x-full transition-transform duration-300 z-50 flex flex-col shadow-2xl">
+    <div class="p-4 border-b border-zinc-800 flex justify-between items-center shrink-0 mt-16 sm:mt-0">
+      <h3 class="font-semibold flex items-center gap-2"><i data-lucide="list" class="w-4 h-4"></i> 播放列表</h3>
+      <button id="btn-close-playlist" class="text-zinc-400 hover:text-white p-1">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+    </div>
+    <div id="playlist-content" class="flex-1 overflow-y-auto w-full no-scrollbar px-2 py-2">
+      <!-- Playlist items go here -->
+    </div>
+    <div class="p-4 border-t border-zinc-800 shrink-0">
+      <button id="btn-clear-playlist" class="w-full py-2 bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-lg text-sm transition-colors">
+        清空列表
+      </button>
+    </div>
+  </div>
+
+  <!-- GD Studio View -->
+  <main id="view-gd" class="flex-1 relative hidden bg-black">
+    <div class="flex items-center justify-between p-4 bg-zinc-900 border-b border-zinc-800 shrink-0 relative z-10">
+      <h2 class="font-semibold text-lg flex items-center gap-2">GD 音乐台联动</h2>
+      <a href="https://music.gdstudio.xyz" target="_blank" class="flex items-center gap-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition-colors">
+        <span>在新标签页打开完全版</span>
+        <i data-lucide="external-link" class="w-4 h-4"></i>
+      </a>
+    </div>
+    <iframe id="gd-iframe" src="https://music.gdstudio.xyz" class="w-full h-full border-none relative z-0" sandbox="allow-scripts allow-same-origin allow-popups allow-forms"></iframe>
+  </main>
+
+  <!-- Local Player View -->
+  <main id="view-player" class="flex-1 min-h-0 flex flex-col relative overflow-hidden">
+    <!-- Audio Element -->
+    <audio id="audio-player"></audio>
+
+    <!-- Controls / Uploaders -->
+    <div id="top-bar-container" class="absolute top-0 left-0 w-full z-40 transition-transform duration-300">
+      <div id="top-bar" class="p-2 sm:p-3 md:p-4 bg-zinc-900/80 backdrop-blur-md flex flex-col sm:flex-row items-center justify-between gap-3 border-b border-zinc-800 origin-top transition-transform duration-300">
+        <div class="flex items-center space-x-2 w-full sm:w-auto">
+          <button id="btn-toggle-playlist" class="p-2 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/5 transition-all rounded-full text-zinc-300 hover:text-white shadow-sm" title="播放列表">
+            <i data-lucide="list-music" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+          </button>
+          <h2 id="song-title" class="font-medium text-sm sm:text-base text-zinc-100 truncate max-w-[150px] sm:max-w-xs md:max-w-md">未选择歌曲</h2>
+        </div>
+        
+        <div class="flex gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar pb-1 sm:pb-0 items-center">
+          <div class="flex items-center space-x-1 sm:space-x-2 px-2 sm:px-3 py-1 sm:py-1.5 bg-white/5 backdrop-blur-md border border-white/5 rounded-full shrink-0">
+            <button id="btn-lrc-minus" class="text-zinc-400 hover:text-white transition-colors p-1" title="歌词提前0.1秒">
+              <i data-lucide="minus" class="w-3 h-3 sm:w-4 sm:h-4"></i>
+            </button>
+            <span id="lrc-offset-display" class="text-xs sm:text-sm font-medium text-zinc-300 min-w-[32px] text-center">0s</span>
+            <button id="btn-lrc-plus" class="text-zinc-400 hover:text-white transition-colors p-1" title="歌词滞后0.1秒">
+              <i data-lucide="plus" class="w-3 h-3 sm:w-4 sm:h-4"></i>
+            </button>
+          </div>
+          <label id="btn-toggle-translation" class="flex-1 sm:flex-none flex items-center justify-center space-x-1 sm:space-x-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/5 rounded-full transition-all cursor-pointer text-xs sm:text-sm font-medium text-zinc-300 hover:text-white shadow-sm shrink-0" title="切换翻译显示">
+            <i data-lucide="languages" class="w-3 h-3 sm:w-4 sm:h-4"></i>
+            <span class="hidden md:inline">翻译</span>
+          </label>
+          <label class="flex-1 sm:flex-none flex items-center justify-center space-x-1 sm:space-x-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/5 rounded-full transition-all cursor-pointer text-xs sm:text-sm font-medium text-zinc-300 hover:text-white shadow-sm shrink-0">
+            <i data-lucide="upload" class="w-3 h-3 sm:w-4 sm:h-4"></i>
+            <span>音频文件</span>
+            <input type="file" id="upload-audio" accept="audio/*" class="hidden" />
+          </label>
+          <label class="flex-1 sm:flex-none flex items-center justify-center space-x-1 sm:space-x-2 px-3 py-1.5 sm:px-4 sm:py-2 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/5 rounded-full transition-all cursor-pointer text-xs sm:text-sm font-medium text-zinc-300 hover:text-white shadow-sm shrink-0">
+            <i data-lucide="file-text" class="w-3 h-3 sm:w-4 sm:h-4"></i>
+            <span>LRC歌词</span>
+            <input type="file" id="upload-lrc" accept=".lrc" class="hidden" />
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lyrics Container -->
+    <div id="lyrics-container" class="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 pt-32 pb-40 no-scrollbar relative">
+      <div id="lyrics-placeholder" class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center text-zinc-500 space-y-4">
+        <i data-lucide="list-music" class="w-12 h-12 sm:w-16 sm:h-16 mx-auto opacity-50"></i>
+        <p class="text-sm sm:text-base">暂无歌词，请上传 LRC 文件</p>
+        <p class="text-xs sm:text-sm opacity-60">或点击上方按钮选取本地音乐直接播放</p>
+      </div>
+      <div id="lyrics-content" class="w-full flex flex-col items-center pb-24"></div>
+    </div>
+
+    <!-- Player Bottom Bar -->
+    <div id="bottom-bar" class="absolute bottom-0 w-full bg-zinc-900/60 backdrop-blur-2xl border-t border-white/5 p-3 sm:p-4 md:px-8 md:py-5 z-50 shadow-[0_-10px_40px_rgba(0,0,0,0.3)] transition-all duration-300 translate-y-full opacity-0 pointer-events-none">
+      <!-- Progress Bar -->
+      <div class="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-4">
+        <span id="time-current" class="text-[10px] sm:text-xs text-zinc-400 font-medium w-8 sm:w-10 text-right">0:00</span>
+        <div class="flex-1 relative h-1.5 sm:h-2">
+          <input type="range" id="progress-bar" min="0" max="100" step="0.1" value="0" class="absolute w-full h-full z-10 opacity-0 cursor-pointer" disabled>
+          <div class="absolute top-1/2 transform -translate-y-1/2 w-full h-1 sm:h-1.5 bg-zinc-700 rounded-lg overflow-hidden">
+            <div id="progress-fill" class="h-full bg-indigo-500 w-0 transition-all duration-100"></div>
+          </div>
+        </div>
+        <span id="time-duration" class="text-[10px] sm:text-xs text-zinc-400 font-medium w-8 sm:w-10">0:00</span>
+      </div>
+
+      <!-- Controls -->
+      <div class="flex items-center justify-between gap-1 sm:gap-2 relative min-h-[40px] sm:min-h-[64px]">
+        <div class="flex-1 flex justify-start items-center pl-2">
+          <select id="speed-select" class="bg-white/5 text-xs sm:text-sm text-zinc-300 rounded-md outline-none px-1 py-1 sm:px-2 sm:py-1.5 shrink-0 border border-white/5 hover:border-white/20 transition-colors cursor-pointer appearance-none text-center">
+            <option value="0.3">0.3x</option>
+            <option value="0.5">0.5x</option>
+            <option value="0.6">0.6x</option>
+            <option value="0.7">0.7x</option>
+            <option value="0.8">0.8x</option>
+            <option value="0.9">0.9x</option>
+            <option value="1" selected>1.0x</option>
+            <option value="1.25">1.25x</option>
+            <option value="1.5">1.5x</option>
+            <option value="1.75">1.75x</option>
+            <option value="2">2.0x</option>
+          </select>
+        </div>
+        <div class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center gap-3 sm:gap-6 z-10 w-auto">
+          <button id="btn-prev" class="w-8 h-8 sm:w-12 sm:h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/5 text-zinc-300 hover:text-white rounded-full transition-all duration-300 active:scale-95 disabled:opacity-50" disabled>
+            <i data-lucide="skip-back" class="w-4 h-4 sm:w-6 sm:h-6 fill-current"></i>
+          </button>
+          <button id="btn-play" class="w-10 h-10 sm:w-16 sm:h-16 flex items-center justify-center bg-white/10 hover:bg-white/20 backdrop-blur-xl border border-white/10 text-white rounded-full shadow-[0_8px_32px_rgba(255,255,255,0.05)] transition-all duration-300 active:scale-95 disabled:opacity-50" disabled>
+            <i id="icon-play" data-lucide="play" class="w-4 h-4 sm:w-6 sm:h-6 fill-current ml-0.5 sm:ml-1"></i>
+            <i id="icon-pause" data-lucide="pause" class="w-4 h-4 sm:w-6 sm:h-6 fill-current hidden"></i>
+          </button>
+          <button id="btn-next" class="w-8 h-8 sm:w-12 sm:h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/5 text-zinc-300 hover:text-white rounded-full transition-all duration-300 active:scale-95 disabled:opacity-50" disabled>
+            <i data-lucide="skip-forward" class="w-4 h-4 sm:w-6 sm:h-6 fill-current"></i>
+          </button>
+        </div>
+        <div class="flex-1 flex items-center justify-end gap-2 sm:gap-3 shrink-0">
+          <button id="btn-mute" class="w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/5 text-zinc-300 hover:text-white rounded-full transition-all duration-300 active:scale-95">
+            <i id="icon-vol" data-lucide="volume-2" class="w-4 h-4 sm:w-5 sm:h-5"></i>
+            <i id="icon-vol-mute" data-lucide="volume-x" class="w-4 h-4 sm:w-5 sm:h-5 hidden"></i>
+          </button>
+          <div class="w-16 lg:w-24 relative h-1.5 sm:h-2 hidden sm:block">
+            <input type="range" id="volume-bar" min="0" max="1" step="0.01" value="1" class="absolute w-full h-full z-10 opacity-0 cursor-pointer">
+            <div class="absolute top-1/2 transform -translate-y-1/2 w-full h-1 sm:h-1.5 bg-zinc-700 rounded-lg overflow-hidden">
+              <div id="volume-fill" class="h-full bg-indigo-500 w-full"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  
+  <script src="./player.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').then(reg => {
+          console.log('ServiceWorker registered with scope:', reg.scope);
+        }).catch(err => {
+          console.log('ServiceWorker registration failed:', err);
+        });
+      });
+    }
+  </script>
+</body>
+</html>

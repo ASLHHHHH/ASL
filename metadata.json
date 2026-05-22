@@ -1,0 +1,6 @@
+{
+  "name": "Minimal Music Player",
+  "description": "A sleek, minimalist music player supporting local audio files with clickable synchronised lyrics, background playback, and GD Music Studio integration.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
